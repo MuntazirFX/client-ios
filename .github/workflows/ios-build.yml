@@ -1,0 +1,53 @@
+name: iOS Build
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    runs-on: macos-14
+
+    env:
+      IOS_DEPLOYMENT_TARGET: "15.0"
+      BUILD_DIR: build-ios
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+      - name: Fetch ios-cmake toolchain
+        run: |
+          curl -L -o ios.toolchain.cmake \
+            https://raw.githubusercontent.com/leetal/ios-cmake/master/ios.toolchain.cmake
+
+      - name: Configure (device, arm64)
+        run: |
+          cmake -B "$BUILD_DIR" \
+            -G Xcode \
+            -DCMAKE_TOOLCHAIN_FILE="$(pwd)/ios.toolchain.cmake" \
+            -DPLATFORM=OS64 \
+            -DDEPLOYMENT_TARGET="$IOS_DEPLOYMENT_TARGET" \
+            -DENABLE_BITCODE=OFF
+
+      - name: Build (Release)
+        run: |
+          cmake --build "$BUILD_DIR" --config Release
+
+      - name: Package artifacts
+        run: |
+          mkdir -p dist
+          find "$BUILD_DIR" -name "*.dylib" -exec cp {} dist/ \;
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-ios-arm64
+          path: dist/*.dylib
+          if-no-files-found: error
